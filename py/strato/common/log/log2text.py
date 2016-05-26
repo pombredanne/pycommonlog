@@ -37,8 +37,8 @@ MULTY_LOG_COLORS = (
     "\033[2;36m",
 )
 COLOR_OFF = "\033[0;0m"
-LOG_CONFIG_FILE_PATH = "/etc/strato-log.conf "
-PRINT_LINE = 0
+LOG_CONFIG_FILE_PATH = "/etc/strato-log.conf"
+HIGHEST_PRIORITY = 0
 
 class Formatter:
     _COLORS = {logging.PROGRESS: CYAN, logging.ERROR: RED, logging.WARNING: YELLOW}
@@ -68,6 +68,8 @@ class Formatter:
     def process(self, line, logPath, logConf):
         if os.path.basename(logPath).endswith(".stratolog"):
             return self._processStratolog(line)
+        elif os.path.basename(logPath) == ("exceptions.log"):
+            return self._processExceptionLog(line)
         else:
             return self._processGenericLog(line, logConf)
 
@@ -83,11 +85,12 @@ class Formatter:
             msg, timestamp = exceptionfinder.seperateTimestamp(line, logConf['logFormat']['timestamp'])
             epochTime = exceptionfinder.translateToEpoch(timestamp, logConf['timeStampFormat'])
             if logConf['skew'] == 'localtime':
-                epochTime -= self._localTimezoneOffset
+                epochTime += self._localTimezoneOffset
             return line.strip().replace(timestamp, self._clock(epochTime)), epochTime
-        except:
+        except Exception as e:
+            print e
             # in case the line wasn't been able to get parsed for some reason, print it as when you encounter it
-            return line.strip('\n'), PRINT_LINE
+            return line.strip('\n'), HIGHEST_PRIORITY
 
     def _processStratolog(self, line):
         parsedLine = json.loads(line)
@@ -111,6 +114,13 @@ class Formatter:
         if parsedLine['exc_text']:
             formatted += "\n" + parsedLine['exc_text']
         return formatted, parsedLine['created']
+
+    def _processExceptionLog(self, line):
+        parsedLine = json.loads(line)
+        line = parsedLine['message']
+        logPath = parsedLine['source']
+        logTypeConf = self._getLogTypeConf(logPath)
+        return self.process(line, logPath, logTypeConf)
 
     def _relativeClock(self, created):
         if self._firstClock is None:

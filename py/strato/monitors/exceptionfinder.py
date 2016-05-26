@@ -118,7 +118,7 @@ def _getMessageData(line, timeGap):
 # if adding journalctl logs, please run the log with "-o short-iso" option
 
 def _parseJournalLine(line, timeGap):
-    epochTime = translateToEpoch(line.split(' ')[0], format="%Y-%m-%dT%H:%M:%S-%f") + timeGap
+    epochTime = translateToEpoch(line.split(' ')[0], timestampFormat="%Y-%m-%dT%H:%M:%S-%f") + timeGap
     msg = ' '.join(line.split(' ')[1:])
     return {'msg': msg, 'created': epochTime, 'pathname': 'journalctl',
             'filename': 'journalctl', "levelname": "WARNING"}
@@ -127,7 +127,7 @@ def _parseJournalLine(line, timeGap):
 def _parseVmConsoleLine(line):
     # vm console does not have exact time signatures, rather is used to verify if certain message occurred
     # while using timestamp of filebeat to see when the line was logged (~10 sec delay)
-    epochTime = translateToEpoch(line["@timestamp"], format="%Y-%m-%dT%H:%M:%S.%fZ")
+    epochTime = translateToEpoch(line["@timestamp"], timestampFormat="%Y-%m-%dT%H:%M:%S.%fZ")
     return {'msg': line['message'], 'created': epochTime, 'pathname': 'vm-console',
             'filename': 'vm-console', 'levelname': 'ERROR'}
 
@@ -143,17 +143,17 @@ def _parseMancalaBinLine(line):
             'filename': filename, 'levelname': 'ERROR'}
 
 
-def seperateTimestamp(message, format='(\d{4}[-/]\d{2}[-/]\d{2} \d{2}[:]\d{2}[:]\d{2})'):
-    # default regex matches date pattern in format "yyyy/dd/mm hh:mm:ss"
-    dateRegex = re.compile(format)
+def seperateTimestamp(message, timestampFormat='(\d{4}[-/]\d{2}[-/]\d{2} \d{2}[:]\d{2}[:]\d{2})'):
+    # default regex matches date pattern in timestampFormat "yyyy/dd/mm hh:mm:ss"
+    dateRegex = re.compile(timestampFormat)
     date = dateRegex.findall(message.strip())[0]
     # remove everything at the beggining of the line that isn't letters and "[" (for consul logs)
     msg = '\n'.join([re.sub("^[^a-zA-Z\[]*", "                ", line) for line in message.split('\n')])
     return msg, date
 
 
-def translateToEpoch(timeStamp, format="%Y/%m/%d %H:%M:%S"):
-    timeObject = datetime.datetime.strptime(timeStamp, format)
+def translateToEpoch(timeStamp, timestampFormat="%Y/%m/%d %H:%M:%S"):
+    timeObject = datetime.datetime.strptime(timeStamp, timestampFormat)
     return calendar.timegm(timeObject. timetuple())
 
 
