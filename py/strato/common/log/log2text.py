@@ -7,7 +7,11 @@ import signal
 import re
 import datetime
 import logging
+import yaml
 import strato.common.log.morelevels
+import re
+from strato.monitors import exceptionfinder
+
 
 RED = '\033[31m'
 GREEN = '\033[32m'
@@ -33,6 +37,8 @@ MULTY_LOG_COLORS = (
     "\033[2;36m",
 )
 COLOR_OFF = "\033[0;0m"
+LOG_CONFIG_FILE_PATH = "/etc/strato-log.conf "
+PRINT_LINE = 0
 
 class Formatter:
     _COLORS = {logging.PROGRESS: CYAN, logging.ERROR: RED, logging.WARNING: YELLOW}
@@ -40,10 +46,13 @@ class Formatter:
     converter = time.gmtime
 
     def __init__(self, relativeTime, withThreads, showFullPaths, noDebug, microsecondPrecision, noColors, localTime=False):
+        print os.path.abspath(os.curdir)
+        self.configFile = yaml.load(open(LOG_CONFIG_FILE_PATH, 'r').read())
         self._firstClock = None
         self._clock = self._relativeClock if relativeTime else self._absoluteClock
         self._relativeClockFormat = "%.6f" if microsecondPrecision else "%.3f"
         self._minimumLevel = logging.INFO if noDebug else logging.DEBUG
+        self._localTimezoneOffset = exceptionfinder.getTimezoneOffset()
         useColors = False if noColors else _runningInATerminal()
         if localTime:
             self.converter = time.localtime
@@ -56,25 +65,52 @@ class Formatter:
             (NORMAL_COLOR if useColors else '') + \
             ("(%(pathname)s:%(lineno)s)" if showFullPaths else "(%(module)s::%(funcName)s:%(lineno)s)")
 
-    def process(self, obj):
-        if obj['levelno'] < self._minimumLevel:
-            return None
-        if 'args' in obj and obj['args']:
-            if isinstance(obj['args'], (dict, tuple)):
-                message = obj['msg'] % obj['args']
-            elif isinstance(obj['args'], list):
-                message = obj['msg'] % tuple(obj['args'])
-            else:
-                message = obj['msg']
+    def process(self, line, logPath, logConf):
+        if os.path.basename(logPath).endswith(".stratolog"):
+            return self._processStratolog(line)
         else:
-            message = obj['msg'].replace('%', '%%')
-        clock = self._clock(obj['created'])
-        colorPrefix = self._COLORS.get(obj['levelno'], '')
+            return self._processGenericLog(line, logConf)
+
+    def _getLogTypeConf(self, logPath):
+        for logType in self.configFile['logTypes']:
+            for pattern in logType['paths']:
+                if re.compile(pattern).match(os.path.basename(logPath)):
+                    return logType
+        return None
+
+    def _processGenericLog(self, line, logConf):
+        try:
+            msg, timestamp = exceptionfinder.seperateTimestamp(line, logConf['logFormat']['timestamp'])
+            epochTime = exceptionfinder.translateToEpoch(timestamp, logConf['timeStampFormat'])
+            if logConf['skew'] == 'localtime':
+                epochTime -= self._localTimezoneOffset
+            return line.strip().replace(timestamp, self._clock(epochTime)), epochTime
+        except:
+            # in case the line wasn't been able to get parsed for some reason, print it as when you encounter it
+            return line.strip('\n'), PRINT_LINE
+
+    def _processStratolog(self, line):
+        parsedLine = json.loads(line)
+        if parsedLine['levelno'] < self._minimumLevel:
+            return None
+
+        if 'args' in parsedLine:
+            if isinstance(parsedLine['args'], (dict, tuple)):
+                message = parsedLine['msg'] % parsedLine['args']
+            elif isinstance(parsedLine['args'], list):
+                message = parsedLine['msg'] % tuple(parsedLine['args'])
+            else:
+                message = parsedLine['msg']
+        else:
+
+            message = parsedLine['msg']
+        clock = self._clock(parsedLine['created'])
+        colorPrefix = self._COLORS.get(parsedLine['levelno'], '')
         formatted = self._logFormat % dict(
-            obj, message=message, log2text_clock=clock, log2text_colorPrefix=colorPrefix)
-        if obj['exc_text']:
-            formatted += "\n" + obj['exc_text']
-        return formatted
+            parsedLine, message=message, log2text_clock=clock, log2text_colorPrefix=colorPrefix)
+        if parsedLine['exc_text']:
+            formatted += "\n" + parsedLine['exc_text']
+        return formatted, parsedLine['created']
 
     def _relativeClock(self, created):
         if self._firstClock is None:
@@ -101,15 +137,15 @@ def follow_generator(istream):
 
 def printLog(logFile, formatter, follow):
     inputStream = sys.stdin if logFile == "-" else open(logFile)
+    logConf = formatter._getLogTypeConf(logFile)
     if follow:
         inputStream = follow_generator(inputStream)
     for line in inputStream:
         try:
-            obj = json.loads(line)
-            formatted = formatter.process(obj)
+            formatted = formatter.process(line, logFile, logConf)
             if formatted is None:
                 continue
-            print formatted
+            print formatted[0]
         except:
             print "Failed to parse record '%s' " % line
 
@@ -122,12 +158,12 @@ def _getNextParsableEntry(inputStream, logFile, colorCode, formatter):
     list the file until the next parsable line
     finish when all lines were listed
     """
+    logConf = formatter._getLogTypeConf(logFile)
     while True:
         try:
             line = inputStream.next()
-            obj = json.loads(line)
-            formatted = formatter.process(obj)
-            return obj, None if formatted is None else _addLogName(formatted, colorCode, logFile)
+            formatted, timestamp = formatter.process(line, logFile, logConf)
+            return timestamp, None if formatted is None else _addLogName(formatted, colorCode, logFile)
         except StopIteration:
             return None
         except:
@@ -166,7 +202,7 @@ def printLogs(logFiles, formatter):
         if not any(currentLines):
             break
 
-        _, nextStreamId, formatted = min((line[0]['created'], streamId, line[1])
+        _, nextStreamId, formatted = min((line[0], streamId, line[1])
                                          for streamId, line in enumerate(currentLines) if line is not None)
         if formatted is not None:
             # prevent printing the Broken Pipe error when 'less' is quitted
