@@ -68,10 +68,9 @@ class Formatter:
     def process(self, line, logPath, logConf):
         if os.path.basename(logPath).endswith(".stratolog"):
             return self._processStratolog(line)
-        elif os.path.basename(logPath) == ("exceptions.log"):
+        elif os.path.basename(logPath) == "exceptions.log":
             return self._processExceptionLog(line)
-        else:
-            return self._processGenericLog(line, logConf)
+        return self._processGenericLog(line, logConf)
 
     def _getLogTypeConf(self, logPath):
         for logType in self.configFile['logTypes']:
@@ -89,7 +88,7 @@ class Formatter:
             return line.strip().replace(timestamp, self._clock(epochTime)), epochTime
         except Exception as e:
             print e
-            # in case the line wasn't been able to get parsed for some reason, print it as when you encounter it
+            # in case the line wasn't able to get parsed for some reason, print it as when you encounter it
             return line.strip('\n'), HIGHEST_PRIORITY
 
     def _processStratolog(self, line):
@@ -103,7 +102,7 @@ class Formatter:
             elif isinstance(parsedLine['args'], list):
                 message = parsedLine['msg'] % tuple(parsedLine['args'])
             else:
-                message = parsedLine['msg'].replase('%', '%%')
+                message = parsedLine['msg'].replace('%', '%%')
         else:
             message = parsedLine['msg'].replace('%', '%%')
         clock = self._clock(parsedLine['created'])
