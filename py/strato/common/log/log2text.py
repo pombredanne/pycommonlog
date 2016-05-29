@@ -97,16 +97,15 @@ class Formatter:
         if parsedLine['levelno'] < self._minimumLevel:
             return None
 
-        if 'args' in parsedLine:
+        if 'args' in parsedLine and parsedLine['args']:
             if isinstance(parsedLine['args'], (dict, tuple)):
                 message = parsedLine['msg'] % parsedLine['args']
             elif isinstance(parsedLine['args'], list):
                 message = parsedLine['msg'] % tuple(parsedLine['args'])
             else:
-                message = parsedLine['msg']
+                message = parsedLine['msg'].replase('%', '%%')
         else:
-
-            message = parsedLine['msg']
+            message = parsedLine['msg'].replace('%', '%%')
         clock = self._clock(parsedLine['created'])
         colorPrefix = self._COLORS.get(parsedLine['levelno'], '')
         formatted = self._logFormat % dict(
@@ -177,23 +176,7 @@ def _getNextParsableEntry(inputStream, logFile, colorCode, formatter):
         except StopIteration:
             return None
         except:
-            line = line.strip()
-            timestampMatch = re.match(r'(\d+\.\d+)(.*)', line)
-            if timestampMatch is not None:
-                timestamp = float(timestampMatch.group(1).split('.')[0])
-                formatted = "%s %s" % (formatter._absoluteClock(timestamp), timestampMatch.group(2))
-                return {'created': timestamp}, _addLogName(formatted, colorCode, logFile)
-            else:
-                dateMatch = re.match(r'(\d{4})/(\d{2})/(\d{2}) (\d{2}):(\d{2}):(\d{2})', line)
-                if dateMatch is not None:
-                    dt = datetime.datetime(int(dateMatch.group(1)), int(dateMatch.group(2)), int(dateMatch.group(3)),
-                                           int(dateMatch.group(4)), int(dateMatch.group(5)), int(dateMatch.group(6)))
-                    timestamp = time.mktime(dt.timetuple())
-                    return {'created': timestamp}, _addLogName(line, colorCode, logFile)
-                else:
-                    return {'created': 0}, line
-            # print "Failed to parse record '%s' " % line
-
+            return HIGHEST_PRIORITY, line
 
 def _getColorCode(id):
     return MULTY_LOG_COLORS[id % (len(MULTY_LOG_COLORS) - 1)]
