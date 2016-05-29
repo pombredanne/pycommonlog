@@ -46,7 +46,6 @@ class Formatter:
     converter = time.gmtime
 
     def __init__(self, relativeTime, withThreads, showFullPaths, noDebug, microsecondPrecision, noColors, localTime=False):
-        print os.path.abspath(os.curdir)
         self.configFile = yaml.load(open(LOG_CONFIG_FILE_PATH, 'r').read())
         self._firstClock = None
         self._clock = self._relativeClock if relativeTime else self._absoluteClock
@@ -122,8 +121,8 @@ class Formatter:
         if logPath not in self._exceptionFiles:
             self._exceptionFiles[logPath] = _getColorCode(len(self._exceptionFiles))
         logTypeConf = self._getLogTypeConf(logPath)
-        line = self.process(line, logPath, logTypeConf)
-        print _addLogName(line, self._exceptionFiles[logPath], logPath)
+        line, timestamp = self.process(line, logPath, logTypeConf)
+        return _addLogName(line, self._exceptionFiles[logPath], logPath), timestamp
 
     def _relativeClock(self, created):
         if self._firstClock is None:
@@ -179,7 +178,8 @@ def _getNextParsableEntry(inputStream, logFile, colorCode, formatter):
             return timestamp, None if formatted is None else _addLogName(formatted, colorCode, logFile)
         except StopIteration:
             return None
-        except:
+        except Exception as e:
+            print e
             return HIGHEST_PRIORITY, line
 
 def _getColorCode(id):
