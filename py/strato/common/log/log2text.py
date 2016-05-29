@@ -10,7 +10,7 @@ import logging
 import yaml
 import strato.common.log.morelevels
 import re
-from strato.monitors import exceptionfinder
+from strato.common.log import lineparse
 
 
 RED = '\033[31m'
@@ -51,7 +51,7 @@ class Formatter:
         self._clock = self._relativeClock if relativeTime else self._absoluteClock
         self._relativeClockFormat = "%.6f" if microsecondPrecision else "%.3f"
         self._minimumLevel = logging.INFO if noDebug else logging.DEBUG
-        self._localTimezoneOffset = exceptionfinder.getTimezoneOffset()
+        self._localTimezoneOffset = lineparse.getTimezoneOffset()
         self._exceptionFiles = {}
         useColors = False if noColors else _runningInATerminal()
         if localTime:
@@ -81,13 +81,12 @@ class Formatter:
 
     def _processGenericLog(self, line, logConf):
         try:
-            msg, timestamp = exceptionfinder.seperateTimestamp(line, logConf['logFormat']['timestamp'])
-            epochTime = exceptionfinder.translateToEpoch(timestamp, logConf['timeStampFormat'])
+            msg, timestamp = lineparse.seperateTimestamp(line, logConf['logFormat']['timestamp'])
+            epochTime = lineparse.translateToEpoch(timestamp, logConf['timeStampFormat'])
             if logConf['timezoneOffset'] == 'localtime':
                 epochTime += self._localTimezoneOffset
             return line.strip().replace(timestamp, self._clock(epochTime)), epochTime
-        except Exception as e:
-            print e
+        except:
             # in case the line wasn't able to get parsed for some reason, print it as when you encounter it
             return line.strip('\n'), HIGHEST_PRIORITY
 
@@ -177,8 +176,7 @@ def _getNextParsableEntry(inputStream, logFile, colorCode, formatter):
             return timestamp, None if formatted is None else _addLogName(formatted, colorCode, logFile)
         except StopIteration:
             return None
-        except Exception as e:
-            print e
+        except:
             return HIGHEST_PRIORITY, line
 
 def _getColorCode(id):
