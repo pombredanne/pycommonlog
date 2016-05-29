@@ -53,6 +53,7 @@ class Formatter:
         self._relativeClockFormat = "%.6f" if microsecondPrecision else "%.3f"
         self._minimumLevel = logging.INFO if noDebug else logging.DEBUG
         self._localTimezoneOffset = exceptionfinder.getTimezoneOffset()
+        self._exceptionFiles = {}
         useColors = False if noColors else _runningInATerminal()
         if localTime:
             self.converter = time.localtime
@@ -118,8 +119,11 @@ class Formatter:
         parsedLine = json.loads(line)
         line = parsedLine['message']
         logPath = parsedLine['source']
+        if logPath not in self._exceptionFiles:
+            self._exceptionFiles[logPath] = _getColorCode(len(self._exceptionFiles))
         logTypeConf = self._getLogTypeConf(logPath)
-        return self.process(line, logPath, logTypeConf)
+        line = self.process(line, logPath, logTypeConf)
+        print _addLogName(line, self._exceptionFiles[logPath], logPath)
 
     def _relativeClock(self, created):
         if self._firstClock is None:
