@@ -83,7 +83,7 @@ class Formatter:
         try:
             msg, timestamp = exceptionfinder.seperateTimestamp(line, logConf['logFormat']['timestamp'])
             epochTime = exceptionfinder.translateToEpoch(timestamp, logConf['timeStampFormat'])
-            if logConf['skew'] == 'localtime':
+            if logConf['timezoneOffset'] == 'localtime':
                 epochTime += self._localTimezoneOffset
             return line.strip().replace(timestamp, self._clock(epochTime)), epochTime
         except Exception as e:

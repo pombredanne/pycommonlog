@@ -43,7 +43,7 @@ def createExceptionFile(hosts):
             try:
                 filePath = os.path.join(exceptionFileDir, fileName)
                 hostExceptions = host.ssh.ftp.getContents(filePath).strip().split('\n')
-                exceptions.extend([_formaliseExceptionLog(line, host.name, timeGap) for line in hostExceptions])
+                exceptions.extend([_formalizeExceptionLog(line, host.name, timeGap) for line in hostExceptions])
                 exceptions.extend(_getBeforeAndAfterRunLogs(host, timeGap))
             except:
                 logging.warning('failed to collect exception log from %s' % host.name)
@@ -57,7 +57,7 @@ def createExceptionFile(hosts):
         f.write('\n'.join([json.dumps(entry) for entry in sortedList]))
 
 
-def _formaliseExceptionLog(line, hostName, timeGap):
+def _formalizeExceptionLog(line, hostName, timeGap):
     try:
         parsedLine = json.loads(line)
         logType = parsedLine['type']
@@ -76,7 +76,7 @@ def _formaliseExceptionLog(line, hostName, timeGap):
 
 
 def _addPropertyToMessage(logLine, propertyName, propertyValue):
-    if type(logLine['args']) == dict:
+    if isinstance(logLine['args'], dict):
         logLine['args'].update({propertyName: propertyValue})
         logLine['msg'] = ''.join([propertyName, ':%(', propertyName, ')s ', logLine['msg']])
     else:
