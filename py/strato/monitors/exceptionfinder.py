@@ -52,7 +52,7 @@ def createExceptionFile(hosts):
         sortedList = sorted(exceptions, key=lambda k: k['created'])
     except:
         logging.warning("Failed to parse some of the lines. Omitting the failed lines")
-        sortedList = sorted([line for line in exceptions if line], key=lambda k: k['created'])
+        sortedList = sorted([line for line in exceptions if line is not None], key=lambda k: k['created'])
     with open(OUTPUT_PATH, 'w+') as f:
         f.write('\n'.join([json.dumps(entry) for entry in sortedList]))
 
