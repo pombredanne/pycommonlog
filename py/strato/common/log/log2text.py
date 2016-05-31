@@ -46,13 +46,16 @@ class Formatter:
     converter = time.gmtime
 
     def __init__(self, relativeTime, withThreads, showFullPaths, noDebug, microsecondPrecision, noColors, localTime=False):
-        self.configFile = yaml.load(open(LOG_CONFIG_FILE_PATH, 'r').read())
+        try:
+            self.configFile = yaml.load(open(LOG_CONFIG_FILE_PATH, 'r').read())
+        except:
+            print "Failed to load config file. Please check the configuration"
         self._firstClock = None
         self._clock = self._relativeClock if relativeTime else self._absoluteClock
         self._relativeClockFormat = "%.6f" if microsecondPrecision else "%.3f"
         self._minimumLevel = logging.INFO if noDebug else logging.DEBUG
         self._localTimezoneOffset = lineparse.getTimezoneOffset()
-        self._exceptionFiles = {}
+        self._exceptionLogsFileColorMapping = {}
         useColors = False if noColors else _runningInATerminal()
         if localTime:
             self.converter = time.localtime
@@ -116,11 +119,11 @@ class Formatter:
         parsedLine = json.loads(line)
         line = parsedLine['message']
         logPath = parsedLine['source']
-        if logPath not in self._exceptionFiles:
-            self._exceptionFiles[logPath] = _getColorCode(len(self._exceptionFiles))
+        if logPath not in self._exceptionLogsFileColorMapping:
+            self._exceptionLogsFileColorMapping[logPath] = _getColorCode(len(self._exceptionLogsFileColorMapping))
         logTypeConf = self._getLogTypeConf(logPath)
         line, timestamp = self.process(line, logPath, logTypeConf)
-        return _addLogName(line, self._exceptionFiles[logPath], logPath), timestamp
+        return _addLogName(line, self._exceptionLogsFileColorMapping[logPath], logPath), timestamp
 
     def _relativeClock(self, created):
         if self._firstClock is None:
@@ -147,15 +150,15 @@ def follow_generator(istream):
 
 def printLog(logFile, formatter, follow):
     inputStream = sys.stdin if logFile == "-" else open(logFile)
-    logConf = formatter._getLogTypeConf(logFile)
+    logTypeConf = formatter._getLogTypeConf(logFile)
     if follow:
         inputStream = follow_generator(inputStream)
     for line in inputStream:
         try:
-            formatted = formatter.process(line, logFile, logConf)
+            formatted, timestamp = formatter.process(line, logFile, logTypeConf)
             if formatted is None:
                 continue
-            print formatted[0]
+            print formatted
         except:
             print "Failed to parse record '%s' " % line
 
@@ -168,11 +171,11 @@ def _getNextParsableEntry(inputStream, logFile, colorCode, formatter):
     list the file until the next parsable line
     finish when all lines were listed
     """
-    logConf = formatter._getLogTypeConf(logFile)
+    logTypeConf = formatter._getLogTypeConf(logFile)
     while True:
         try:
             line = inputStream.next()
-            formatted, timestamp = formatter.process(line, logFile, logConf)
+            formatted, timestamp = formatter.process(line, logFile, logTypeConf)
             return timestamp, None if formatted is None else _addLogName(formatted, colorCode, logFile)
         except StopIteration:
             return None
